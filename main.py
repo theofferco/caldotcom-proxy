@@ -1,26 +1,23 @@
-
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import uvicorn
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 app = FastAPI()
 
-@app.post("/proxy")
-async def proxy(request: Request):
-    body = await request.json()
+class BookingRequest(BaseModel):
+    start: str
+    eventTypeId: int
+    attendee_name: str
+    attendee_email: str
+    attendee_timeZone: str
 
-    # Transform flat body into nested Cal.com-compatible structure
-    transformed = {
-        "start": body.get("start"),
-        "eventTypeId": body.get("eventTypeId"),
+@app.post("/")
+def book_meeting(request: BookingRequest):
+    return {
+        "start": request.start,
+        "eventTypeId": request.eventTypeId,
         "attendee": {
-            "name": body.get("attendee_name"),
-            "email": body.get("attendee_email"),
-            "timeZone": "America/Phoenix"  # Always Phoenix timezone
+            "name": request.attendee_name,
+            "email": request.attendee_email,
+            "timeZone": request.attendee_timeZone
         }
     }
-
-    return JSONResponse(content=transformed)
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
