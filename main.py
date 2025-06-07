@@ -1,41 +1,42 @@
 from fastapi import FastAPI, Request
-from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import requests
 import os
 
 app = FastAPI()
 
-# Log all incoming requests (for debugging)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     body = await request.body()
-    print(f"\n\nREQUEST BODY:\n{body.decode()}\n\n")
+    print(f"\nREQUEST BODY:\n{body.decode()}\n")
     response = await call_next(request)
     return response
 
-# Booking request with flat input from Hope
-class BookingRequest(BaseModel):
-    start: str
-    eventTypeId: int
-    attendee_name: str
-    attendee_email: str
-    attendee_timeZone: str
-
 @app.post("/")
-def book_meeting(request: BookingRequest):
-    # Prepare nested payload
+async def book_meeting(request: Request):
+    try:
+        body = await request.json()
+    except:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload"})
+
+    # Validate required fields
+    required_fields = ["start", "eventTypeId", "attendee_name", "attendee_email", "attendee_timeZone"]
+    for field in required_fields:
+        if field not in body:
+            return JSONResponse(status_code=400, content={"error": f"Missing field: {field}"})
+
+    # Build payload for Cal.com
     payload = {
-        "start": request.start,
-        "eventTypeId": request.eventTypeId,
+        "start": body["start"],
+        "eventTypeId": body["eventTypeId"],
         "attendee": {
-            "name": request.attendee_name,
-            "email": request.attendee_email,
-            "timeZone": request.attendee_timeZone
+            "name": body["attendee_name"],
+            "email": body["attendee_email"],
+            "timeZone": body["attendee_timeZone"]
         }
     }
 
-    # Send to Cal.com
+    # Send to Cal.com API
     cal_url = "https://api.cal.com/v2/bookings"
     headers = {
         "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
@@ -44,8 +45,6 @@ def book_meeting(request: BookingRequest):
     }
 
     response = requests.post(cal_url, json=payload, headers=headers)
-
-    # Return Cal.com response
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
 @app.get("/")
