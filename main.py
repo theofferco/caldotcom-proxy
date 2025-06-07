@@ -1,44 +1,48 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import requests
 import os
 
 app = FastAPI()
 
+# Booking request with flat input from Hope
+class BookingRequest(BaseModel):
+    start: str
+    eventTypeId: int
+    attendee_name: str
+    attendee_email: str
+    attendee_timeZone: str
+
 @app.post("/")
-async def book_appointment(request: Request):
-    try:
-        data = await request.json()
-        print("REQUEST BODY (parsed):", data)
-    except Exception as e:
-        print("ERROR PARSING JSON:", str(e))
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
-
-    try:
-        payload = {
-            "start": data["start"],
-            "eventTypeId": data["eventTypeId"],
-            "attendee": {
-                "name": data["attendee_name"],
-                "email": data["attendee_email"],
-                "timeZone": data["attendee_timeZone"]
-            }
+def book_meeting(request: BookingRequest):
+    # Prepare nested payload
+    payload = {
+        "start": request.start,
+        "eventTypeId": request.eventTypeId,
+        "attendee": {
+            "name": request.attendee_name,
+            "email": request.attendee_email,
+            "timeZone": request.attendee_timeZone
         }
+    }
 
-        headers = {
-            "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
-            "Content-Type": "application/json",
-            "cal-api-version": "2024-09-04"
-        }
+    # ✅ Updated Cal.com endpoint
+    cal_url = "https://api.cal.com/bookings"
+    headers = {
+        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
+        "Content-Type": "application/json",
+        "cal-api-version": "2024-09-04"
+    }
 
-        response = requests.post("https://api.cal.com/v2/bookings", json=payload, headers=headers)
-        print("CAL.COM RESPONSE:", response.status_code, response.text)
-        return JSONResponse(content=response.json(), status_code=response.status_code)
+    response = requests.post(cal_url, json=payload, headers=headers)
 
-    except Exception as e:
-        print("ERROR BOOKING APPOINTMENT:", str(e))
-        return JSONResponse(status_code=500, content={"error": "Booking failed"})
+    # Log for debugging
+    print("REQUEST BODY (parsed):", payload)
+    print("CAL.COM RESPONSE:", response.status_code, response.text)
+
+    return JSONResponse(content=response.json(), status_code=response.status_code)
 
 @app.get("/")
-async def health_check():
-    return {"message": "Calendar proxy is live"}
+async def root():
+    return JSONResponse(content={"message": "Calendar proxy is live."})
