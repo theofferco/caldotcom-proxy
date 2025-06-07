@@ -1,10 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import requests
 import os
 
 app = FastAPI()
+
+# Log all incoming requests (for debugging)
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    body = await request.body()
+    print(f"\n\nREQUEST BODY:\n{body.decode()}\n\n")
+    response = await call_next(request)
+    return response
 
 # Booking request with flat input from Hope
 class BookingRequest(BaseModel):
