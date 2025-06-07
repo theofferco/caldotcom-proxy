@@ -5,48 +5,40 @@ import os
 
 app = FastAPI()
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    body = await request.body()
-    print(f"\nREQUEST BODY:\n{body.decode()}\n")
-    response = await call_next(request)
-    return response
-
 @app.post("/")
-async def book_meeting(request: Request):
+async def book_appointment(request: Request):
     try:
-        body = await request.json()
-    except:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload"})
+        data = await request.json()
+        print("REQUEST BODY (parsed):", data)
+    except Exception as e:
+        print("ERROR PARSING JSON:", str(e))
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
 
-    # Validate required fields
-    required_fields = ["start", "eventTypeId", "attendee_name", "attendee_email", "attendee_timeZone"]
-    for field in required_fields:
-        if field not in body:
-            return JSONResponse(status_code=400, content={"error": f"Missing field: {field}"})
-
-    # Build payload for Cal.com
-    payload = {
-        "start": body["start"],
-        "eventTypeId": body["eventTypeId"],
-        "attendee": {
-            "name": body["attendee_name"],
-            "email": body["attendee_email"],
-            "timeZone": body["attendee_timeZone"]
+    try:
+        payload = {
+            "start": data["start"],
+            "eventTypeId": data["eventTypeId"],
+            "attendee": {
+                "name": data["attendee_name"],
+                "email": data["attendee_email"],
+                "timeZone": data["attendee_timeZone"]
+            }
         }
-    }
 
-    # Send to Cal.com API
-    cal_url = "https://api.cal.com/v2/bookings"
-    headers = {
-        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
-        "Content-Type": "application/json",
-        "cal-api-version": "2024-09-04"
-    }
+        headers = {
+            "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
+            "Content-Type": "application/json",
+            "cal-api-version": "2024-09-04"
+        }
 
-    response = requests.post(cal_url, json=payload, headers=headers)
-    return JSONResponse(content=response.json(), status_code=response.status_code)
+        response = requests.post("https://api.cal.com/v2/bookings", json=payload, headers=headers)
+        print("CAL.COM RESPONSE:", response.status_code, response.text)
+        return JSONResponse(content=response.json(), status_code=response.status_code)
+
+    except Exception as e:
+        print("ERROR BOOKING APPOINTMENT:", str(e))
+        return JSONResponse(status_code=500, content={"error": "Booking failed"})
 
 @app.get("/")
-async def root():
-    return JSONResponse(content={"message": "Calendar proxy is live."})
+async def health_check():
+    return {"message": "Calendar proxy is live"}
