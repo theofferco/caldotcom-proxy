@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
-import requests
 import os
+import requests
 
 app = FastAPI()
 
@@ -14,7 +14,19 @@ class BookingRequest(BaseModel):
     attendee_timeZone: str
 
 @app.post("/")
-async def book_meeting(req: BookingRequest):
+def book_meeting(req: BookingRequest):
+    api_key = os.environ.get("CAL_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="CAL_API_KEY is missing.")
+
+    print("✅ API KEY EXISTS:", bool(api_key))  # this will log True if it found the key
+
+    headers = {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "Content-Type": "application/json",
+        "cal-api-version": "2024-09-04"
+    }
+
     payload = {
         "start": req.start,
         "eventTypeId": req.eventTypeId,
@@ -25,24 +37,16 @@ async def book_meeting(req: BookingRequest):
         }
     }
 
-    cal_url = "https://api.cal.com/api/v1/bookings"  # ✅ Use the v1 endpoint
+    url = "https://api.cal.com/v2/bookings"
+    response = requests.post(url, json=payload, headers=headers)
 
-    api_key = os.getenv("CAL_API_KEY")
-    print("using API key:", "present" if api_key else "none")
+    print("📡 CAL.COM STATUS:", response.status_code)
+    print("📨 CAL.COM BODY:", response.text)
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-
-    print("REQUEST BODY (parsed):", payload)
-
-    resp = requests.post(cal_url, json=payload, headers=headers)
-
-    print("CAL.COM RESPONSE:", resp.status_code, resp.text)
-
-    return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail=response.json())
+    return JSONResponse(content=response.json())
 
 @app.get("/")
-async def root():
-    return JSONResponse(content={"message": "Calendar proxy is live."})
+def root():
+    return {"message": "Calendar proxy is live."}
