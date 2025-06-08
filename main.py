@@ -1,55 +1,48 @@
+import os
+import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
-from fastapi.responses import JSONResponse
-import requests
-import os
 
 app = FastAPI()
 
-# Booking request with flat input from Hope
+CAL_API_KEY = os.getenv("CAL_API_KEY")
+
+headers = {
+    "Authorization": f"Bearer {CAL_API_KEY}",
+    "Content-Type": "application/json"
+}
+
+class Attendee(BaseModel):
+    name: str
+    email: str
+    timeZone: str
+
 class BookingRequest(BaseModel):
-    start: str
     eventTypeId: int
-    attendee_name: str
-    attendee_email: str
-    attendee_timeZone: str
-
-@app.post("/")
-def book_meeting(request: BookingRequest):
-    payload = {
-        "start": request.start,
-        "eventTypeId": request.eventTypeId,
-        "attendee": {
-            "name": request.attendee_name,
-            "email": request.attendee_email,
-            "timeZone": request.attendee_timeZone
-        }
-    }
-
-    cal_url = "https://api.cal.com/v2/bookings"
-    headers = {
-        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
-        "Content-Type": "application/json",
-        "cal-api-version": "2024-09-04"
-    }
-
-    response = requests.post(cal_url, json=payload, headers=headers)
-    return JSONResponse(content=response.json(), status_code=response.status_code)
+    start: str
+    attendee: Attendee
 
 @app.get("/")
 def root():
-    return JSONResponse(content={"message": "Calendar proxy is live."})
+    return {"message": "Cal.com Proxy is live."}
 
 @app.get("/test-cal")
-def test_cal_api_key():
-    cal_url = "https://api.cal.com/v2/event-types"
-    headers = {
-        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
-        "cal-api-version": "2024-09-04"
-    }
+def test_cal_connection():
+    url = "https://api.cal.com/v2/event-types"
+    response = requests.get(url, headers=headers)
+    return {"status_code": response.status_code, "response": response.json()}
 
-    response = requests.get(cal_url, headers=headers)
-    return {
-        "status_code": response.status_code,
-        "response": response.json()
+@app.post("/")
+def create_booking(request: BookingRequest):
+    url = "https://api.cal.com/v2/bookings"
+    data = {
+        "eventTypeId": request.eventTypeId,
+        "start": request.start,
+        "attendee": {
+            "name": request.attendee.name,
+            "email": request.attendee.email,
+            "timeZone": request.attendee.timeZone
+        }
     }
+    response = requests.post(url, headers=headers, json=data)
+    return {"status_code": response.status_code, "response": response.json()}
