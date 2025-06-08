@@ -6,7 +6,7 @@ import os
 
 app = FastAPI()
 
-# Booking request structure expected from Hope
+# Booking request with flat input from Hope
 class BookingRequest(BaseModel):
     start: str
     eventTypeId: int
@@ -34,9 +34,22 @@ def book_meeting(request: BookingRequest):
     }
 
     response = requests.post(cal_url, json=payload, headers=headers)
-
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
 @app.get("/")
-async def root():
+def root():
     return JSONResponse(content={"message": "Calendar proxy is live."})
+
+@app.get("/test-cal")
+def test_cal_api_key():
+    cal_url = "https://api.cal.com/v2/event-types"
+    headers = {
+        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
+        "cal-api-version": "2024-09-04"
+    }
+
+    response = requests.get(cal_url, headers=headers)
+    return {
+        "status_code": response.status_code,
+        "response": response.json()
+    }
