@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import requests
@@ -6,7 +6,6 @@ import os
 
 app = FastAPI()
 
-# Booking request with flat input from Hope
 class BookingRequest(BaseModel):
     start: str
     eventTypeId: int
@@ -15,33 +14,34 @@ class BookingRequest(BaseModel):
     attendee_timeZone: str
 
 @app.post("/")
-def book_meeting(request: BookingRequest):
-    # Prepare nested payload
+async def book_meeting(req: BookingRequest):
     payload = {
-        "start": request.start,
-        "eventTypeId": request.eventTypeId,
+        "start": req.start,
+        "eventTypeId": req.eventTypeId,
         "attendee": {
-            "name": request.attendee_name,
-            "email": request.attendee_email,
-            "timeZone": request.attendee_timeZone
+            "name": req.attendee_name,
+            "email": req.attendee_email,
+            "timeZone": req.attendee_timeZone
         }
     }
 
-    # ✅ Updated Cal.com endpoint
-    cal_url = "https://api.cal.com/bookings"
+    cal_url = "https://api.cal.com/api/v1/bookings"  # ✅ Use the v1 endpoint
+
+    api_key = os.getenv("CAL_API_KEY")
+    print("using API key:", "present" if api_key else "none")
+
     headers = {
-        "Authorization": f"Bearer {os.environ.get('CAL_API_KEY')}",
-        "Content-Type": "application/json",
-        "cal-api-version": "2024-09-04"
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
 
-    response = requests.post(cal_url, json=payload, headers=headers)
-
-    # Log for debugging
     print("REQUEST BODY (parsed):", payload)
-    print("CAL.COM RESPONSE:", response.status_code, response.text)
 
-    return JSONResponse(content=response.json(), status_code=response.status_code)
+    resp = requests.post(cal_url, json=payload, headers=headers)
+
+    print("CAL.COM RESPONSE:", resp.status_code, resp.text)
+
+    return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
 @app.get("/")
 async def root():
